@@ -1,0 +1,26 @@
+{
+  "name": "staysphere-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "REST API for StaySphere — a role-based rental marketplace for tier-2 and tier-3 Indian cities",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "seed:admin": "node src/scripts/seedAdmin.js",
+    "test": "node --test",
+    "seed:demo": "node src/scripts/seedDemo.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1",
+    "express-validator": "^7.2.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.20.1"
+  }
+}
