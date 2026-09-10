@@ -42,6 +42,38 @@ export function createApp() {
   app.set('trust proxy', 1)
 
   /**
+   * Root route.
+   *
+   * Nothing in the app calls this — it exists because opening
+   * http://localhost:5000 in a browser is the first thing anyone does to
+   * check whether the server is up, and a bare 404 there reads as "the
+   * backend is broken". This answers with what the API is and where to
+   * look instead.
+   */
+  app.get('/', (_req, res) => {
+    res.status(200).json({
+      success: true,
+      name: 'StaySphere API',
+      status: 'running',
+      environment: env.nodeEnv,
+      health: '/health',
+      endpoints: {
+        auth: ['POST /api/auth/register', 'POST /api/auth/login', 'GET /api/auth/me'],
+        properties: [
+          'GET /api/properties',
+          'GET /api/properties/nearby',
+          'GET /api/properties/my-properties',
+          'GET /api/properties/:id',
+          'POST /api/properties',
+          'PUT /api/properties/:id',
+          'DELETE /api/properties/:id',
+        ],
+      },
+      note: 'Bookings, payments and admin endpoints are not implemented yet.',
+    })
+  })
+
+  /**
    * Health check — used to confirm the server is up and whether the
    * database connection is live. Intentionally outside /api so it stays
    * usable even if API routing changes.
