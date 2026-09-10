@@ -308,3 +308,5 @@ Two things to know:
 | `npm test` | Run the test suite against `staysphere_test` |
 | `npm run seed:admin` | Create/update the admin account from `.env` |
 | `npm run seed:demo` | Create/update the three demo accounts |
+#   a n u p _ b a c k e n d  
+ 
