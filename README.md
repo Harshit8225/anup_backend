@@ -6,10 +6,11 @@ accommodation in tier-2 and tier-3 Indian cities.
 Built with Node.js, Express 5, MongoDB and Mongoose. Authentication uses JWT
 with bcrypt-hashed passwords.
 
-> **Build status:** Phases 1–4 of the backend plan are implemented and tested
-> (foundation, database models, authentication, role authorization).
-> Property CRUD, search, bookings, payments and the admin APIs are **not built
-> yet** — see [Roadmap](#roadmap).
+> **Build status:** Phases 1–6 are implemented and tested — foundation,
+> database models, authentication, role authorization, property CRUD, and
+> search/filters/pagination with geospatial nearby queries.
+> Bookings, payments, favourites, landlord dashboards and the admin APIs
+> are **not built yet** — see [Roadmap](#roadmap).
 
 ---
 
@@ -64,8 +65,9 @@ backend/
     models/       User, Property, Booking, Payment (+ index.js barrel)
     routes/       route tables, mounted through routes/index.js
     services/     business rules — the part worth reading
+    validators/   express-validator rules per module
     utils/        AppError, generateToken
-    scripts/      seedAdmin.js
+    scripts/      seedAdmin, seedDemo, seedProperties, syncIndexes
     app.js        builds the Express app (no side effects)
     server.js     connects the DB, then starts listening
   tests/          Node built-in test runner
@@ -154,6 +156,115 @@ account has since been suspended.
 
 ---
 
+### `GET /api/properties`
+
+Search, filter, sort and paginate listings. No authentication required —
+but the results widen if the caller happens to be the owner or an admin.
+
+| Query parameter | Example | Notes |
+| --- | --- | --- |
+| `q` | `q=hostel` | Matches title, city, address or type |
+| `city` | `city=Gorakhpur` | Exact city, case-insensitive |
+| `type` | `type=PG,Hostel` | One or more of PG, Flat, Hostel, Room, Studio |
+| `gender` | `gender=Female` | Listings marked `Any` always match too |
+| `occupancy` | `occupancy=Single,Shared` | Single, Double, Triple, Shared |
+| `furnishing` | `furnishing=Fully-furnished` | |
+| `amenities` | `amenities=AC,Gym` | **All** listed amenities must be present |
+| `minRent` / `maxRent` | `maxRent=8000` | Matches if *any* occupancy price is in range |
+| `status` | `status=available` | Availability state |
+| `sort` | `sort=price-asc` | `default`, `price-asc`, `price-desc`, `rating`, `newest`, `rooms` |
+| `page` / `limit` | `page=2&limit=9` | `limit` caps at 50 |
+
+```json
+{
+  "success": true,
+  "data": {
+    "properties": [ { "id": "…", "title": "…", "rent": { "single": 7500 }, "…": "…" } ],
+    "pagination": { "page": 1, "limit": 9, "total": 9, "totalPages": 1, "hasMore": false }
+  }
+}
+```
+
+### `GET /api/properties/nearby`
+
+Radius search, nearest first. Requires `lat` and `lng`; `radiusKm`
+defaults to 5 and is capped at 100. Each result carries a `distanceKm`
+computed by MongoDB against the 2dsphere index.
+
+```
+GET /api/properties/nearby?lat=26.7606&lng=83.3732&radiusKm=15
+```
+
+### `GET /api/properties/:id`
+
+One listing. Returns `404` — not `403` — for a listing the caller is not
+allowed to see, so hidden listings cannot be probed by id.
+
+### `GET /api/properties/my-properties`
+
+Landlord only. Every listing the caller owns, whatever its verification
+or availability state.
+
+### `POST /api/properties`
+
+Landlord only. Creates a listing owned by the authenticated landlord.
+
+```json
+{
+  "title": "Sunrise PG for Girls near DDU University",
+  "description": "At least 30 characters describing the place…",
+  "type": "PG",
+  "gender": "Female",
+  "occupancy": ["Single", "Double"],
+  "rent": { "single": 7500, "double": 5200 },
+  "deposit": 15000,
+  "totalRooms": 12,
+  "availableRooms": 3,
+  "furnishing": "Fully-furnished",
+  "amenities": ["WiFi", "Mess/Food"],
+  "landmarks": ["700m from DDU University"],
+  "images": ["https://…"],
+  "location": {
+    "address": "Betiahata, near Civil Lines",
+    "city": "Gorakhpur",
+    "state": "Uttar Pradesh",
+    "pincode": "273001",
+    "lat": 26.7606,
+    "lng": 83.3732
+  }
+}
+```
+
+`landlord`, `verificationStatus`, `featured` and `availabilityStatus` are
+**ignored** if sent: ownership comes from the token, moderation from an
+admin, and availability from the booking workflow. A new listing starts
+`pending`, so it is not publicly discoverable until verified.
+
+### `PUT /api/properties/:id` · `DELETE /api/properties/:id`
+
+Landlord only, and only for listings they own — another landlord gets
+`403`. Accepts a partial body. Editing a listing that was already
+verified sends it back to `pending`, so approved content cannot be
+quietly swapped afterwards.
+
+---
+
+## Discoverability rules
+
+A listing appears in public results only when `verificationStatus` is
+`verified` and it is not `inactive`. Beyond that:
+
+| Viewer | Sees |
+| --- | --- |
+| Anonymous / tenant | Verified, active listings only |
+| Landlord | The above, plus every listing they own |
+| Admin | Everything, including suspended and rejected |
+
+Occupied listings stay visible — a tenant can still find and inspect
+them — they are simply not available to book.
+
+---
+
 ## Roles and permissions
 
 Roles are `tenant`, `landlord` and `admin`.
@@ -181,10 +292,21 @@ not migrations.
 - **User** — name, email (unique), phone, `passwordHash` (`select: false`),
   role, status, favorites. Hashing lives in the model, so no controller can
   save a plain-text password.
-- **Property** — landlord ref, type, rent, area, occupancy, furnishing,
-  amenities, images, address, and a GeoJSON `location` point with a
-  **2dsphere index** ready for the radius search. Also a compound
-  `city + type + rent` index and a text index on title/description/locality.
+- **Property** — landlord ref, type, gender preference, occupancy tiers,
+  per-occupancy `rent`, deposit, room counts, furnishing, amenities,
+  landmarks, images, and a `location` holding both the postal address and
+  a GeoJSON point with a **2dsphere index** for the radius search. A
+  `pre('save')` hook keeps indexed `rentMin`/`rentMax` in step with the
+  per-occupancy prices, which is what makes rent filtering and sorting a
+  plain indexed query. Also a compound `city + type + rentMin` index and a
+  text index.
+
+  Two vocabularies meet in this model on purpose: storage follows the
+  specification (GeoJSON coordinates, separate `verificationStatus` and
+  `availabilityStatus`), while `toPublicJSON()` emits what the React app
+  already reads (`location.lat`/`lng`, `status`, a `verified` boolean, a
+  landlord object). That one method is the only place the translation
+  happens, so neither side had to be rewritten.
 - **Booking** — tenant, landlord and property refs, plus the status machine.
   `BOOKING_TRANSITIONS` in `models/Booking.js` is the single source of truth
   for which status may follow which:
@@ -229,12 +351,25 @@ integrated** — the field records that honestly.
 npm test
 ```
 
-Runs the Node built-in test runner (no extra dependencies) against a separate
-`staysphere_test` database, which is dropped afterwards. 23 tests cover the
-health route, JSON 404s, registration (including duplicate email, weak
-password, bad phone and the blocked admin self-registration), password
-hashing, login, `/me` with missing/malformed tokens, suspended accounts, and
-every role-authorization combination.
+Runs the Node built-in test runner — no extra dependencies. Each test file
+uses its own throwaway database (`staysphere_test_auth`,
+`staysphere_test_properties`), dropped afterwards, so the files can run in
+parallel without fighting over the same records.
+
+**64 tests**, covering:
+
+- *Auth and roles (23)* — health route, JSON 404s, registration including
+  duplicate email, weak password, bad phone and blocked admin
+  self-registration, bcrypt hashing, login, `/me` with
+  missing/malformed/expired tokens, suspended accounts, and every
+  tenant/landlord/admin route combination.
+- *Properties (41)* — creation and validation, the owner being taken from
+  the token rather than the body, a landlord being unable to self-verify
+  or self-feature, ownership on update and delete, re-verification after
+  an edit, every search filter (city, type, gender, occupancy, amenities,
+  rent range, free text, combinations), sorting, pagination without
+  overlap, moderation visibility from four viewpoints, and the nearby
+  radius query including distance ordering and exclusions.
 
 ---
 
@@ -248,8 +383,8 @@ Following the project's phase plan:
 | 2. Database models — User, Property, Booking, Payment | Done |
 | 3. Authentication — register, login, `/me`, JWT, bcrypt | Done |
 | 4. Authorization — role middleware | Done |
-| 5. Property CRUD | Not started |
-| 6. Search, filters, pagination, nearby | Not started |
+| 5. Property CRUD | Done |
+| 6. Search, filters, pagination, nearby | Done |
 | 7. Booking workflow | Not started |
 | 8. Payment and confirmation | Not started |
 | 9. Profile and favourites | Not started |
@@ -305,8 +440,8 @@ Two things to know:
 | --- | --- |
 | `npm run dev` | Start with file watching |
 | `npm start` | Start once |
-| `npm test` | Run the test suite against `staysphere_test` |
+| `npm test` | Run the test suite (each file uses its own test database) |
 | `npm run seed:admin` | Create/update the admin account from `.env` |
 | `npm run seed:demo` | Create/update the three demo accounts |
-#   a n u p _ b a c k e n d  
- 
+| `npm run seed:properties` | Create/update the demo listings and their two landlords |
+| `npm run db:sync-indexes` | Drop obsolete indexes and build missing ones after a schema change |

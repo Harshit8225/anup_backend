@@ -1,8 +1,8 @@
 /**
  * Phase 3 + 4 tests: authentication and role authorization.
  *
- * Uses Node's built-in test runner (no extra dependencies) against a
- * separate `staysphere_test` database, which is dropped afterwards.
+ * Uses Node's built-in test runner (no extra dependencies) against its
+ * own throwaway database (staysphere_test_auth), dropped afterwards.
  *
  * Run with:  npm test      (requires a local MongoDB on 27017)
  */
@@ -12,7 +12,7 @@ import assert from 'node:assert/strict'
 // Point the app at a throwaway database BEFORE anything reads the config.
 // dotenv does not override variables that are already set, so these win.
 process.env.NODE_ENV = 'test'
-process.env.MONGODB_URI = 'mongodb://127.0.0.1:27017/staysphere_test'
+process.env.MONGODB_URI = 'mongodb://127.0.0.1:27017/staysphere_test_auth'
 process.env.JWT_SECRET = 'test-secret-do-not-use-anywhere-else'
 
 const mongoose = (await import('mongoose')).default

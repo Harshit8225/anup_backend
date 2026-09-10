@@ -10,7 +10,9 @@
     "start": "node src/server.js",
     "seed:admin": "node src/scripts/seedAdmin.js",
     "test": "node --test",
-    "seed:demo": "node src/scripts/seedDemo.js"
+    "seed:demo": "node src/scripts/seedDemo.js",
+    "seed:properties": "node src/scripts/seedProperties.js",
+    "db:sync-indexes": "node src/scripts/syncIndexes.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

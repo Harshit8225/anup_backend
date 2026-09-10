@@ -43,3 +43,32 @@ export async function protect(req, _res, next) {
   req.user = user
   return next()
 }
+
+/**
+ * Same as `protect`, but never rejects.
+ *
+ * Used on public routes whose *results* depend on who is asking: an
+ * anonymous visitor sees only verified listings, while a landlord also
+ * sees their own pending ones and an admin sees everything. A missing or
+ * bad token simply means "anonymous" here rather than an error.
+ */
+export async function optionalAuth(req, _res, next) {
+  const header = req.headers.authorization ?? ''
+
+  if (!header.startsWith('Bearer ')) {
+    return next()
+  }
+
+  try {
+    const payload = verifyToken(header.slice('Bearer '.length).trim())
+    const user = await User.findById(payload.sub)
+
+    if (user && user.status !== 'suspended') {
+      req.user = user
+    }
+  } catch {
+    // Ignore a bad token: the caller is treated as anonymous.
+  }
+
+  return next()
+}
