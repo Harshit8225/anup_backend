@@ -2,9 +2,10 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import mongoose from 'mongoose'
-import { env } from './config/env.js'
+import { env, isProduction } from './config/env.js'
 import { apiLimiter } from './middleware/rateLimiter.js'
 import { errorHandler, notFoundHandler } from './middleware/errorMiddleware.js'
+import { AppError } from './utils/AppError.js'
 import apiRoutes from './routes/index.js'
 
 /**
@@ -19,16 +20,39 @@ export function createApp() {
   // Security headers.
   app.use(helmet())
 
-  // Only the frontend origins we actually use may call this API.
+  /**
+   * CORS.
+   *
+   * In production only the configured origins may call the API. In
+   * development any localhost port is accepted, because Vite moves to
+   * 5174, 5175 and so on whenever the previous port is busy — and a
+   * mismatch there shows up in the browser as a confusing "cannot reach
+   * the server" rather than as a CORS problem.
+   */
+  function isOriginAllowed(origin) {
+    if (env.clientOrigins.includes(origin)) return true
+    if (isProduction) return false
+
+    return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+  }
+
   app.use(
     cors({
       origin(origin, callback) {
         // Requests with no Origin header (Postman, curl, server-to-server)
         // are allowed; browsers always send one.
-        if (!origin || env.clientOrigins.includes(origin)) {
+        if (!origin || isOriginAllowed(origin)) {
           return callback(null, true)
         }
-        return callback(new Error(`Origin ${origin} is not allowed by CORS.`))
+
+        // Logged so a blocked origin is diagnosable from the server output,
+        // and returned as a 403 rather than an unexplained 500.
+        console.warn(`CORS: blocked request from origin ${origin}`)
+        return callback(
+          new AppError(403, `Origin ${origin} is not allowed to call this API.`, {
+            code: 'ORIGIN_NOT_ALLOWED',
+          }),
+        )
       },
       credentials: true,
     }),
