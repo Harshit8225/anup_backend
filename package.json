@@ -12,7 +12,9 @@
     "test": "node --test",
     "seed:demo": "node src/scripts/seedDemo.js",
     "seed:properties": "node src/scripts/seedProperties.js",
-    "db:sync-indexes": "node src/scripts/syncIndexes.js"
+    "db:sync-indexes": "node src/scripts/syncIndexes.js",
+    "seed:bookings": "node src/scripts/seedBookings.js",
+    "seed": "npm run seed:demo && npm run seed:properties && npm run seed:bookings"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

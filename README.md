@@ -539,6 +539,49 @@ Two things to know:
   `Password123`. The login screen's hint box lists exactly these. They are
   development fixtures — never seed them in production.
 
+---
+
+## Test accounts
+
+One command sets up every role, the listings and a spread of booking
+requests to look at:
+
+```bash
+npm run seed
+```
+
+It runs `seed:demo`, `seed:properties` and `seed:bookings` in order, and
+is safe to re-run — it resets the seeded records rather than duplicating
+them.
+
+| Role | Email | Password | What you can check |
+| --- | --- | --- | --- |
+| Tenant | `user@test.com` | `Password123` | Search and filters, property detail, a pending request, one awaiting payment, one rejected with a reason, notifications |
+| Tenant | `tenant2@test.com` | `Password123` | A second tenant, so you can confirm one tenant cannot see another's bookings |
+| Landlord | `landlord@test.com` | `Password123` | 5 listings, a request queue with 2 pending to approve/reject, plus approved and rejected history |
+| Landlord | `landlord2@test.com` | `Password123` | 5 further listings — use it to confirm a landlord cannot touch another's property |
+| Admin | `admin@test.com` | `Password123` | Sees all 10 listings through the API including the unverified one; blocked from landlord-only routes |
+
+After seeding you get:
+
+- 10 listings across Gorakhpur, Lucknow, Varanasi, Indore, Jaipur and
+  Prayagraj. Nine are verified and public; one is deliberately left
+  `pending` so moderation has something to act on, and one is `occupied`.
+- 4 booking requests: 2 pending, 1 at `payment_pending`, 1 rejected.
+- Notifications for both the tenant and the landlord.
+
+### Worth knowing while testing
+
+- A listing a landlord creates starts as `pending` verification, so it
+  will **not** appear in public search until an admin verifies it. The
+  admin moderation endpoints are not built yet, so for now re-run
+  `npm run seed:properties` or flip `verificationStatus` directly if you
+  need a new listing to be publicly visible.
+- The tenant and landlord screens run on the real API. The **admin
+  screens are still mock-driven** — there are no admin endpoints yet.
+- The payment step is deliberately disabled: Razorpay is not configured,
+  and the UI says so rather than faking a successful transaction.
+
 ### Scripts
 
 | Command | What it does |
@@ -547,6 +590,8 @@ Two things to know:
 | `npm start` | Start once |
 | `npm test` | Run the test suite (each file uses its own test database) |
 | `npm run seed:admin` | Create/update the admin account from `.env` |
+| `npm run seed` | Everything below, in order — the usual way to set up |
 | `npm run seed:demo` | Create/update the three demo accounts |
 | `npm run seed:properties` | Create/update the demo listings and their two landlords |
+| `npm run seed:bookings` | Create booking requests in every state, plus a second tenant |
 | `npm run db:sync-indexes` | Drop obsolete indexes and build missing ones after a schema change |
