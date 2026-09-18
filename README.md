@@ -6,11 +6,14 @@ accommodation in tier-2 and tier-3 Indian cities.
 Built with Node.js, Express 5, MongoDB and Mongoose. Authentication uses JWT
 with bcrypt-hashed passwords.
 
-> **Build status:** Phases 1–6 are implemented and tested — foundation,
-> database models, authentication, role authorization, property CRUD, and
-> search/filters/pagination with geospatial nearby queries.
-> Bookings, payments, favourites, landlord dashboards and the admin APIs
-> are **not built yet** — see [Roadmap](#roadmap).
+> **Build status:** foundation, models, authentication, role authorization,
+> property CRUD, search/filters/pagination with geospatial nearby queries,
+> the booking state machine and in-app notifications are implemented and
+> tested (94 tests).
+>
+> **Not built yet:** payments (Razorpay), transactional email (Resend),
+> media uploads (Cloudinary), Google Maps, favourites, landlord dashboard
+> aggregates and admin moderation — see [Roadmap](#roadmap).
 
 ---
 
@@ -64,7 +67,7 @@ backend/
     config/       env.js (validated config), db.js (single connection)
     controllers/  thin request/response handlers
     middleware/   auth, roles, validation, rate limits, central errors
-    models/       User, Property, Booking, Payment (+ index.js barrel)
+    models/       User, Property, Booking, Payment, Notification (+ barrel)
     routes/       route tables, mounted through routes/index.js
     services/     business rules — the part worth reading
     validators/   express-validator rules per module
@@ -105,12 +108,15 @@ Failure:
 {
   "success": false,
   "message": "Some fields need your attention.",
+  "code": "VALIDATION_FAILED",
   "errors": { "email": "Enter a valid email address." }
 }
 ```
 
-`errors` is present only for validation failures, keyed by field name, which is
-what the React forms need to show messages inline.
+`code` is a stable, machine-readable identifier (`INVALID_BOOKING_STATE`,
+`NOT_OWNER`, `DUPLICATE_REQUEST`, …) so the frontend can branch on it without
+matching message text. `errors` is present only for validation failures, keyed
+by field name, which is what the React forms need to show messages inline.
 
 ---
 
@@ -251,6 +257,88 @@ quietly swapped afterwards.
 
 ---
 
+---
+
+## Bookings
+
+The booking lifecycle is enforced entirely on the server. **No endpoint
+accepts a status** — a client calls an action and the server decides the
+resulting state.
+
+```
+pending ──approve──> accepted ──server──> payment_pending ──payment──> paid ──> booked ──> occupied
+   │                                              │
+   ├──reject──> rejected                          └──cancel──> cancelled
+   └──cancel──> cancelled
+```
+
+`BOOKING_TRANSITIONS` in `models/Booking.js` is the only definition of
+what may follow what, and every change goes through it. Each booking also
+keeps a `history` array recording who changed the state, when and why.
+
+### `POST /api/bookings` — tenant
+
+```json
+{
+  "propertyId": "…",
+  "occupancyType": "Single",
+  "moveInDate": "2026-10-01",
+  "durationMonths": 11,
+  "message": "Could I visit this weekend?"
+}
+```
+
+The rent and deposit are read from the property, never from the request,
+and are frozen onto the booking so a later rent edit cannot change what
+was agreed. Rejected with a clear `code` when the property is unverified
+(`PROPERTY_NOT_VERIFIED`), full (`NO_ROOMS_AVAILABLE`), does not offer
+that tier (`OCCUPANCY_NOT_OFFERED`), or the tenant already has an open
+request for it (`DUPLICATE_REQUEST`).
+
+### `GET /api/bookings/my-bookings` · `GET /api/bookings/landlord`
+
+A tenant's own bookings, and the requests for a landlord's properties.
+Both paginate and accept `?status=`.
+
+### `GET /api/bookings/:id`
+
+Readable by the tenant, the landlord, or an admin. Anyone else gets `404`
+rather than `403`, so bookings cannot be enumerated.
+
+### `PATCH /api/bookings/:id/approve` — owning landlord
+
+Moves the request through `accepted` to `payment_pending` and claims a
+room. The claim is a conditional update (`availableRooms >= 1` in the
+filter), so when two approvals race for the last room, **one wins with
+`200` and the other gets `409 INVALID_BOOKING_STATE` / `NO_ROOMS_AVAILABLE`** —
+rooms can never go negative. Taking the last room flips the listing to
+`booked`.
+
+### `PATCH /api/bookings/:id/reject` — owning landlord
+
+Optional `reason`, stored and shown to the tenant. Does not consume a room.
+
+### `PATCH /api/bookings/:id/cancel` — tenant who made it, or admin
+
+Releases a room if one had been claimed, and returns the listing to
+`available` if it had been marked `booked`.
+
+---
+
+## Notifications
+
+Created by the backend whenever a booking event happens — never by a
+client. Read state is a timestamp, so marking as read keeps history.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/notifications` | Own feed, newest first, with `unreadCount`. `?unread=true` filters. |
+| `PATCH /api/notifications/:id/read` | Mark one read (owner only). |
+| `PATCH /api/notifications/read-all` | Mark the whole feed read. |
+
+A notification creation failure is logged and swallowed: it must never
+roll back the booking action that triggered it.
+
 ## Discoverability rules
 
 A listing appears in public results only when `verificationStatus` is
@@ -368,13 +456,18 @@ if you need to; the database name is still forced to a test one.
 So running the tests needs a local MongoDB even when the app itself is on
 Atlas.
 
-**64 tests**, covering:
+**94 tests**, covering:
 
 - *Auth and roles (23)* — health route, JSON 404s, registration including
   duplicate email, weak password, bad phone and blocked admin
   self-registration, bcrypt hashing, login, `/me` with
   missing/malformed/expired tokens, suspended accounts, and every
   tenant/landlord/admin route combination.
+- *Bookings and notifications (30)* — request creation with server-derived
+  rent, duplicate-request and unverified-property rejection, approve/reject
+  ownership, double approval, the **two-approvals-race for the last room**
+  (one wins, one conflicts, rooms never go negative), cancellation
+  releasing a claimed room, feed isolation and unread counts.
 - *Properties (41)* — creation and validation, the owner being taken from
   the token rather than the body, a landlord being unable to self-verify
   or self-feature, ownership on update and delete, re-verification after
@@ -397,7 +490,7 @@ Following the project's phase plan:
 | 4. Authorization — role middleware | Done |
 | 5. Property CRUD | Done |
 | 6. Search, filters, pagination, nearby | Done |
-| 7. Booking workflow | Not started |
+| 7. Booking workflow | Done |
 | 8. Payment and confirmation | Not started |
 | 9. Profile and favourites | Not started |
 | 10. Landlord APIs | Not started |

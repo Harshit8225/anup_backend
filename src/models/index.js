@@ -23,6 +23,8 @@ export {
   BOOKING_STATUSES,
   BOOKING_TRANSITIONS,
   ACTIVE_BOOKING_STATUSES,
+  COMMITTED_BOOKING_STATUSES,
   PAYMENT_STATUSES,
 } from './Booking.js'
 export { Payment, PAYMENT_RESULTS, PAYMENT_PROVIDERS } from './Payment.js'
+export { Notification, NOTIFICATION_TYPES } from './Notification.js'

@@ -68,8 +68,22 @@ export function createApp() {
           'PUT /api/properties/:id',
           'DELETE /api/properties/:id',
         ],
+        bookings: [
+          'POST /api/bookings',
+          'GET /api/bookings/my-bookings',
+          'GET /api/bookings/landlord',
+          'GET /api/bookings/:id',
+          'PATCH /api/bookings/:id/approve',
+          'PATCH /api/bookings/:id/reject',
+          'PATCH /api/bookings/:id/cancel',
+        ],
+        notifications: [
+          'GET /api/notifications',
+          'PATCH /api/notifications/:id/read',
+          'PATCH /api/notifications/read-all',
+        ],
       },
-      note: 'Bookings, payments and admin endpoints are not implemented yet.',
+      note: 'Payments, admin moderation and the Maps/Cloudinary/Resend integrations are not implemented yet.',
     })
   })
 

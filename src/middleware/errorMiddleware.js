@@ -4,7 +4,11 @@ import { isProduction } from '../config/env.js'
 
 /** Catch-all for unmatched routes, so clients get JSON instead of HTML. */
 export function notFoundHandler(req, _res, next) {
-  next(new AppError(404, `Route not found: ${req.method} ${req.originalUrl}`))
+  next(
+    new AppError(404, `Route not found: ${req.method} ${req.originalUrl}`, {
+      code: 'ROUTE_NOT_FOUND',
+    }),
+  )
 }
 
 /**
@@ -23,22 +27,25 @@ function normalizeError(error) {
     for (const [field, issue] of Object.entries(error.errors)) {
       fieldErrors[field] = issue.message
     }
-    return new AppError(400, 'Some fields need your attention.', fieldErrors)
+    return new AppError(400, 'Some fields need your attention.', {
+      code: 'VALIDATION_FAILED',
+      details: fieldErrors,
+    })
   }
 
   // A malformed ObjectId in the URL is a client mistake, not a crash.
   if (error instanceof mongoose.Error.CastError) {
-    return new AppError(400, `Invalid value for ${error.path}.`)
+    return new AppError(400, `Invalid value for ${error.path}.`, { code: 'INVALID_ID' })
   }
 
   // Unique index violation.
   if (error.code === 11000) {
     const field = Object.keys(error.keyPattern ?? {})[0] ?? 'value'
-    return new AppError(409, `That ${field} is already in use.`)
+    return new AppError(409, `That ${field} is already in use.`, { code: 'DUPLICATE_KEY' })
   }
 
   if (error.type === 'entity.parse.failed') {
-    return new AppError(400, 'Request body is not valid JSON.')
+    return new AppError(400, 'Request body is not valid JSON.', { code: 'MALFORMED_JSON' })
   }
 
   return null
@@ -51,6 +58,7 @@ export function errorHandler(error, _req, res, _next) {
     return res.status(known.statusCode).json({
       success: false,
       message: known.message,
+      code: known.code,
       ...(known.details ? { errors: known.details } : {}),
     })
   }
@@ -62,6 +70,7 @@ export function errorHandler(error, _req, res, _next) {
   return res.status(500).json({
     success: false,
     message: 'Something went wrong on our side. Please try again.',
+    code: 'INTERNAL_ERROR',
     ...(isProduction ? {} : { debug: error.message }),
   })
 }
