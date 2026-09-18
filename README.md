@@ -16,7 +16,9 @@ with bcrypt-hashed passwords.
 
 ## Getting started
 
-You need Node.js 20+ and a MongoDB server running locally on port 27017.
+You need Node.js 20+ and a MongoDB database — either a local server on port
+27017 or a MongoDB Atlas cluster. The test suites additionally need a local
+server (see [Testing](#testing)).
 
 ```bash
 cd backend
@@ -43,7 +45,7 @@ curl http://localhost:5000/health
 | --- | --- |
 | `NODE_ENV` | `development` / `production`. Controls error detail and rate limits. |
 | `PORT` | HTTP port. Defaults to `5000`, which is what the frontend expects. |
-| `MONGODB_URI` | Connection string, e.g. `mongodb://127.0.0.1:27017/staysphere`. |
+| `MONGODB_URI` | Connection string. Local: `mongodb://127.0.0.1:27017/staysphere`. Atlas: `mongodb+srv://user:pass@cluster.mongodb.net/staysphere`. With Atlas, allowlist your IP under Network Access. |
 | `JWT_SECRET` | Signing secret. Use a long random string outside development. |
 | `JWT_EXPIRES_IN` | Token lifetime, e.g. `7d`. |
 | `CLIENT_ORIGINS` | Comma-separated browser origins allowed through CORS. |
@@ -355,6 +357,16 @@ Runs the Node built-in test runner — no extra dependencies. Each test file
 uses its own throwaway database (`staysphere_test_auth`,
 `staysphere_test_properties`), dropped afterwards, so the files can run in
 parallel without fighting over the same records.
+
+The suites **never** use `MONGODB_URI`. They resolve their own connection
+through `tests/testDatabase.js`, which defaults to a local server and
+refuses any database whose name does not contain `test` — because these
+tests call `dropDatabase()`, and the application database is now a shared
+Atlas cluster. Point them at a different server with `MONGODB_TEST_URI`
+if you need to; the database name is still forced to a test one.
+
+So running the tests needs a local MongoDB even when the app itself is on
+Atlas.
 
 **64 tests**, covering:
 

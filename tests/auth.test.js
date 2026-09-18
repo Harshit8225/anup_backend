@@ -8,11 +8,12 @@
  */
 import test, { after, before, describe } from 'node:test'
 import assert from 'node:assert/strict'
+import { resolveTestUri } from './testDatabase.js'
 
 // Point the app at a throwaway database BEFORE anything reads the config.
 // dotenv does not override variables that are already set, so these win.
 process.env.NODE_ENV = 'test'
-process.env.MONGODB_URI = 'mongodb://127.0.0.1:27017/staysphere_test_auth'
+process.env.MONGODB_URI = resolveTestUri('staysphere_test_auth')
 process.env.JWT_SECRET = 'test-secret-do-not-use-anywhere-else'
 
 const mongoose = (await import('mongoose')).default

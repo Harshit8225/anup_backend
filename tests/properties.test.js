@@ -10,9 +10,10 @@
  */
 import test, { after, before, describe } from 'node:test'
 import assert from 'node:assert/strict'
+import { resolveTestUri } from './testDatabase.js'
 
 process.env.NODE_ENV = 'test'
-process.env.MONGODB_URI = 'mongodb://127.0.0.1:27017/staysphere_test_properties'
+process.env.MONGODB_URI = resolveTestUri('staysphere_test_properties')
 process.env.JWT_SECRET = 'test-secret-do-not-use-anywhere-else'
 
 const mongoose = (await import('mongoose')).default
