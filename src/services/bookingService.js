@@ -103,6 +103,8 @@ export async function createBookingRequest(body, tenant) {
     securityDeposit: property.deposit ?? 0,
     moveInDate: body.moveInDate,
     durationMonths: body.durationMonths ?? 11,
+    userType: body.userType || null,
+    purpose: body.purpose || null,
     message: body.message,
     history: [{ from: null, to: 'pending', at: new Date(), by: tenant._id }],
   })

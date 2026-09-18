@@ -47,6 +47,16 @@ export const createBookingRules = [
     .optional()
     .isInt({ min: 1, max: 60 }).withMessage('Duration must be between 1 and 60 months.'),
 
+  body('userType')
+    .optional({ values: 'falsy' })
+    .isIn(['Student', 'Working Professional', 'Other'])
+    .withMessage('Choose a valid user type.'),
+
+  body('purpose')
+    .optional({ values: 'falsy' })
+    .isIn(['Study', 'Work', 'Personal'])
+    .withMessage('Choose a valid purpose of stay.'),
+
   body('message')
     .optional()
     .trim()

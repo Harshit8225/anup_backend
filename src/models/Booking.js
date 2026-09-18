@@ -108,6 +108,21 @@ const bookingSchema = new mongoose.Schema(
     moveInDate: { type: Date, required: true },
     durationMonths: { type: Number, default: 11, min: 1, max: 60 },
 
+    /**
+     * Context the tenant gives about themselves. The landlord sees these
+     * when reviewing a request, which is the point of collecting them.
+     */
+    userType: {
+      type: String,
+      enum: ['Student', 'Working Professional', 'Other'],
+      default: null,
+    },
+    purpose: {
+      type: String,
+      enum: ['Study', 'Work', 'Personal'],
+      default: null,
+    },
+
     // Optional note from the tenant to the landlord.
     message: { type: String, trim: true, maxlength: 500 },
 
@@ -179,6 +194,8 @@ bookingSchema.methods.toPublicJSON = function toPublicJSON() {
     paymentStatus: this.paymentStatus,
 
     occupancyType: this.occupancyType,
+    userType: this.userType,
+    purpose: this.purpose,
     monthlyRent: this.monthlyRent,
     securityDeposit: this.securityDeposit,
     moveInDate: this.moveInDate,
